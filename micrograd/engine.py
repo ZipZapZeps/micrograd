@@ -1,10 +1,14 @@
 
+import math
+
 class Value:
     """ stores a single scalar value and its gradient """
 
-    def __init__(self, data, _children=(), _op=''):
+    def __init__(self, data, _children=(), _op='Value'):
         self.data = data
         self.grad = 0
+        self.last_grad = 0
+        self.learning_rate = 1
         # internal variables used for autograd graph construction
         self._backward = lambda: None
         self._prev = set(_children)
@@ -51,6 +55,18 @@ class Value:
 
         return out
 
+    def tanh(self):
+        x = self.data
+
+        t = math.tanh(x)
+        out = Value(t, (self,), 'tanh')
+
+        def _backward():
+            self.grad += (1- t**2) * out.grad
+        out._backward = _backward
+
+        return out
+
     def backward(self):
 
         # topological order all of the children in the graph
@@ -91,4 +107,4 @@ class Value:
         return other * self**-1
 
     def __repr__(self):
-        return f"Value(data={self.data}, grad={self.grad})"
+        return f"{self._op}:(data={self.data:.5f}, grad={self.grad:.5f})"

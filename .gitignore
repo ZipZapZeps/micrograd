@@ -1,1 +1,2 @@
 .ipynb_checkpoints/
+micrograd/__pycache__/*.pyc
