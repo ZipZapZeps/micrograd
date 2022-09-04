@@ -9,7 +9,7 @@ class Module:
 
     def init_learning_rate(self):
         for p in self.parameters():
-            p.learning_rate = 1.0
+            p.learning_rate = 1.
 
     def parameters(self):
         return []
@@ -17,9 +17,9 @@ class Module:
 class Neuron(Module):
 
     def __init__(self, nin, name, nonlin=True):
-        self.w = [Value(random.uniform(-1,1),_op= f"{name}w{i}") for i in range(nin)]
+        self.w = [Value(random.uniform(-1,1) / nin,_op= f"{name}w{i}") for i in range(nin)]
         self.b = Value(0, _op = f"{name}b")
-        self.s = Value(0., _op = f"{name}s")
+        self.s = Value(0.75, _op = f"{name}s")
         self.nonlin = nonlin
         self.name = name
 
@@ -30,16 +30,18 @@ class Neuron(Module):
         b2 = h-t2
         act1 = self.b
         act2 = Value(0)
-        for wi,xi in zip(self.w,x):
+        """for wi,xi in zip(self.w,x):
             act1 = act1 + wi*xi
             act2 = act2 + (wi-xi)**2
-        return (act1*b1-act2*b2).tanh()
-        """act = sum((wi*xi for wi,xi in zip(self.w, x)), self.b)
-        return act.tanh() * b1 + act * b2"""
+        return (act1*b1-act2*b2).tanh()"""
+        act = sum((wi*xi for wi,xi in zip(self.w, x)), self.b)
+        return act.tanh() * b1 + act * b2
         """act = sum((wi*xi for wi,xi in zip(self.w, x)), self.b)
         return act.relu() if self.nonlin else act"""
         """act = sum((wi*xi for wi,xi in zip(self.w, x)), self.b)
         return act.tanh()"""
+        """act = sum((wi*xi for wi,xi in zip(self.w, x)), self.b)
+        return act.sin() + 1.1 * act"""
 
     def parameters(self):
         return self.w + [self.b,self.s]

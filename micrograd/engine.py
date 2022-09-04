@@ -56,16 +56,31 @@ class Value:
         return out
 
     def tanh(self):
-        x = self.data
-
-        t = math.tanh(x)
-        out = Value(t, (self,), 'tanh')
+        out = Value(math.tanh(self.data), (self,), 'tanh')
 
         def _backward():
-            self.grad += (1- t**2) * out.grad
+            self.grad += (1- out.data**2) * out.grad
+
         out._backward = _backward
 
         return out
+
+    def sin(self):
+        out = Value(math.sin(self.data), (self,), 'sin')
+
+        def _backward():
+            self.grad += math.cos(self.data) * out.grad
+
+        out._backward = _backward
+
+        return out
+
+
+    def fact(self):
+        if self <= Value(0):
+            return Value(1)
+        return self * (self - Value(1))
+
 
     def backward(self):
 
