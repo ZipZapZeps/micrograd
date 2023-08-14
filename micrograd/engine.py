@@ -7,8 +7,6 @@ class Value:
     def __init__(self, data, _children=(), _op='Value'):
         self.data = data
         self.grad = 0
-        self.last_grad = 0
-        self.learning_rate = 1
         # internal variables used for autograd graph construction
         self._backward = lambda: None
         self._prev = set(_children)
@@ -51,9 +49,31 @@ class Value:
 
         def _backward():
             self.grad += (out.data > 0) * out.grad
+        
         out._backward = _backward
 
         return out
+    
+    def softplus(self):
+        try:
+            beta = 10
+            out_value = self.data + math.log1p(math.exp(-beta*self.data))/beta
+            if out_value > 10:
+                print(f"The following value seems high: {out_value}")
+            out = Value(out_value, (self,), 'SoftPlus')
+
+            def _backward():
+                out_grad_value = 1. / (1.+math.exp(-beta*out.data))
+                self.grad += out_grad_value * out.grad
+                if abs(self.grad) > 0.25:
+                    print(f"The following gradient seems high: {self.grad}")
+
+            out._backward = _backward
+
+            return out
+        except Exception as e:
+            print(f"The following value caused an exception: {self.data}")
+
 
     def tanh(self):
         out = Value(math.tanh(self.data), (self,), 'tanh')
