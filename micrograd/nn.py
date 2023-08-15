@@ -21,8 +21,8 @@ class Neuron(Module):
 
     def __init__(self, nin, name, activation_func=Value.noop):
         super().__init__()
-        self.w = [Value(random.uniform(-1,1),_op= f"{name}w{i}") for i in range(nin)]
-        self.b = Value(0., _op = f"{name}b")
+        self.w = [Value(random.uniform(-1,1),_op= f"{name}.w{i}") for i in range(nin)]
+        self.b = Value(0., _op = f"{name}.b")
         self.activation_func = activation_func
 
     def __call__(self, x):
@@ -42,13 +42,13 @@ class Neuron(Module):
 class RBFNeuron(Module):
     def __init__(self, nin, name, activation_func=Value.noop):
         super().__init__()
-        self.w = [Value(random.uniform(-1,1),_op= f"{name}w{i}") for i in range(nin)]
-        self.b = Value(random.uniform(1.,2.), _op = f"{name}b")
+        self.w = [Value(random.uniform(-1,1),_op= f"{name}.w{i}") for i in range(nin)]
+        self.b = Value(random.uniform(1.,2.), _op = f"{name}.b")
         self.activation_func = activation_func
 
     def __call__(self, x):
         if self.active:
-            wx = sum((wi+xi) ** 2. for wi,xi in zip(self.w, x)) ** 0.5
+            wx = sum((xi-wi) ** 2. for wi,xi in zip(self.w, x)) ** 0.5
             act = wx * -1. + self.b
             return self.activation_func(act)
         return Value(0.)
@@ -59,6 +59,30 @@ class RBFNeuron(Module):
     def __repr__(self):
         return f"{self.activation_func.__name__.title()}RBFNeuron({len(self.w)})"
     
+class BlendedNeuron(Module):
+    def __init__(self, nin, name, activation_func=Value.noop):
+        super().__init__()
+        self.w = [Value(random.uniform(-1,1),_op= f"{name}.w{i}") for i in range(nin)]
+        self.b = Value(random.uniform(0.,2.), _op = f"{name}.b")
+        self.a = Value(random.uniform(0.,1.), _op = f"{name}.a")
+        self.activation_func = activation_func
+
+    def __call__(self, x):
+        if self.active:
+            wx1 = sum((xi-wi) ** 2. for wi,xi in zip(self.w, x)) ** 0.5
+            wx2 = sum(wi*xi for wi,xi in zip(self.w, x))
+            act1 = self.a * (wx1 + self.b)
+            act2 = (Value(1.) - self.a) * (wx2 * -1. + self.b)
+            return self.activation_func(act1+act2)
+        
+        return Value(0.)
+
+    def parameters(self):
+        return self.w + [self.a, self.b]
+
+    def __repr__(self):
+        return f"{self.activation_func.__name__.title()}BlendedNeuron({len(self.w)})"
+        
 class Layer(Module):
 
     def __init__(self, name:str, neurons):
@@ -88,9 +112,9 @@ class MLP(Module):
                 if last_layer:
                     yield Neuron(nin, name)
                 elif i % 2:
-                    yield Neuron(nin, name, **kwargs)
+                    yield BlendedNeuron(nin, name, **kwargs)
                 else:
-                    yield RBFNeuron(nin, name, **kwargs)
+                    yield BlendedNeuron(nin, name, **kwargs)
 
         for i in range(len(nouts)):
             name = f"l{i}"

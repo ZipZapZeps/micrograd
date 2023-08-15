@@ -12,6 +12,9 @@ class Value:
         self._prev = set(_children)
         self._op = _op # the op that produced this node, for graphviz / debugging / etc
 
+    def noop(self):
+        return self
+    
     def __add__(self, other):
         other = other if isinstance(other, Value) else Value(other)
         out = Value(self.data + other.data, (self, other), '+')
@@ -54,26 +57,18 @@ class Value:
 
         return out
     
-    def softplus(self):
-        try:
-            beta = 10
-            out_value = self.data + math.log1p(math.exp(-beta*self.data))/beta
-            if out_value > 10:
-                print(f"The following value seems high: {out_value}")
-            out = Value(out_value, (self,), 'SoftPlus')
+    def softplus(self,beta = 10.):
+        out_value = self.data + math.log1p(math.exp(-beta*self.data)) / beta
+        
+        out = Value(out_value, (self,), 'SoftPlus')
 
-            def _backward():
-                out_grad_value = 1. / (1.+math.exp(-beta*out.data))
-                self.grad += out_grad_value * out.grad
-                if abs(self.grad) > 0.25:
-                    print(f"The following gradient seems high: {self.grad}")
+        def _backward():
+            out_grad_value = 1. / (1.+math.exp(-beta * out.data))
+            self.grad += out_grad_value * out.grad
 
-            out._backward = _backward
+        out._backward = _backward
 
-            return out
-        except Exception as e:
-            print(f"The following value caused an exception: {self.data}")
-
+        return out
 
     def tanh(self):
         out = Value(math.tanh(self.data), (self,), 'tanh')
