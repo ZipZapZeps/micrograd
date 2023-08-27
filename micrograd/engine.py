@@ -51,19 +51,47 @@ class Value:
         out = Value(0 if self.data < 0 else self.data, (self,), 'ReLU')
 
         def _backward():
-            self.grad += (out.data > 0) * out.grad
+            self.grad += (self.data > 0) * out.grad
         
         out._backward = _backward
 
         return out
     
+    def signed_sqr(self):
+        out_value = 0.5 * (self.data ** 2.)
+        out_value *= 1.0 if self.data < 0. else -1.0
+
+        out = Value(out_value, (self,), 'SignedSqr')
+
+        def _backward():
+            self.grad += (1.0 if self.data < 0. else -1.0) * out.grad
+
+        out._backward = _backward
+
+        return out
+        
+    def max(self, other):
+        out_value = self.data if self.data > other.data else other.data
+
+        out = Value(out_value, (self,other), 'Max')
+
+        def _backward():
+            if self.data >= other.data:
+                self.grad += out.grad
+            else:
+                other.grad += out.grad
+
+        out._backward = _backward
+
+        return out
+
     def softplus(self,beta = 10.):
         out_value = self.data + math.log1p(math.exp(-beta*self.data)) / beta
         
         out = Value(out_value, (self,), 'SoftPlus')
 
         def _backward():
-            out_grad_value = 1. / (1.+math.exp(-beta * out.data))
+            out_grad_value = 1. / (1.+math.exp(-beta * self.data))
             self.grad += out_grad_value * out.grad
 
         out._backward = _backward
@@ -90,6 +118,15 @@ class Value:
 
         return out
 
+    def abs(self):
+        out = Value(abs(self.data), (self,), 'abs')
+
+        def _backward():
+            self.grad += (-out.grad) if self.data < 0 else out.grad 
+
+        out._backward = _backward
+
+        return out
 
     def fact(self):
         if self <= Value(0):
