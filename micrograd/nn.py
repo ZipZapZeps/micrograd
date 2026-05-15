@@ -83,6 +83,35 @@ class BlendedNeuron(Module):
     def __repr__(self):
         return f"{self.activation_func.__name__.title()}BlendedNeuron({len(self.w)})"
         
+class EMLNeuron(Module):
+    """ Binary EML node: eml(x, y) = exp(x) - log(y), with x, y two affine maps
+        over the input. Weights are complex-valued; gradients flow through the
+        principal-branch complex log so y is free to pass through zero. """
+
+    def __init__(self, nin, name):
+        super().__init__()
+        def cw(i, tag):
+            return Value(complex(random.uniform(-1, 1), random.uniform(-0.1, 0.1)),
+                         _op=f"{name}.{tag}{i}")
+        self.wx = [cw(i, 'wx') for i in range(nin)]
+        self.wy = [cw(i, 'wy') for i in range(nin)]
+        self.bx = Value(complex(0., 0.), _op=f"{name}.bx")
+        # Bias y away from 0 so the initial log is well-conditioned.
+        self.by = Value(complex(1., 0.), _op=f"{name}.by")
+
+    def __call__(self, x):
+        if self.active:
+            xi = sum((wi * xj for wi, xj in zip(self.wx, x)), self.bx)
+            yi = sum((wi * xj for wi, xj in zip(self.wy, x)), self.by)
+            return xi.eml(yi)
+        return Value(complex(0., 0.))
+
+    def parameters(self):
+        return self.wx + self.wy + [self.bx, self.by]
+
+    def __repr__(self):
+        return f"EMLNeuron({len(self.wx)})"
+
 class Layer(Module):
 
     def __init__(self, name:str, neurons):
@@ -133,3 +162,31 @@ class MLP(Module):
 
     def __repr__(self):
         return f"MLP of [{', '.join(str(layer) for layer in self.layers)}]"
+
+class EMLMLP(Module):
+    """ MLP whose neurons are EMLNeurons. All intermediate Values are complex;
+        the final scalar output is converted to a real Value via .real() so the
+        existing SVM-margin loss in the demo notebooks works unchanged. """
+
+    def __init__(self, nin, nouts):
+        sz = [nin] + nouts
+        layers = []
+        for i in range(len(nouts)):
+            name = f"eml_l{i}"
+            neurons = [EMLNeuron(sz[i], f"{name}.n{j}") for j in range(sz[i+1])]
+            layers.append(Layer(name, neurons))
+        self.layers = layers
+
+    def __call__(self, x):
+        for layer in self.layers:
+            x = layer(x)
+        # x is either a single Value or a list at the head; project to real.
+        if isinstance(x, list):
+            return [xi.real() for xi in x]
+        return x.real()
+
+    def parameters(self):
+        return [p for layer in self.layers for p in layer.parameters()]
+
+    def __repr__(self):
+        return f"EMLMLP of [{', '.join(str(layer) for layer in self.layers)}]"

@@ -1,5 +1,6 @@
 
 import math
+import cmath
 
 class Value:
     """ stores a single scalar value and its gradient """
@@ -31,8 +32,8 @@ class Value:
         out = Value(self.data * other.data, (self, other), '*')
 
         def _backward():
-            self.grad += other.data * out.grad
-            other.grad += self.data * out.grad
+            self.grad += other.data.conjugate() * out.grad
+            other.grad += self.data.conjugate() * out.grad
         out._backward = _backward
 
         return out
@@ -42,7 +43,7 @@ class Value:
         out = Value(self.data**other, (self,), f'**{other}')
 
         def _backward():
-            self.grad += (other * self.data**(other-1)) * out.grad
+            self.grad += (other * self.data**(other-1)).conjugate() * out.grad
         out._backward = _backward
 
         return out
@@ -51,19 +52,47 @@ class Value:
         out = Value(0 if self.data < 0 else self.data, (self,), 'ReLU')
 
         def _backward():
-            self.grad += (out.data > 0) * out.grad
+            self.grad += (self.data > 0) * out.grad
         
         out._backward = _backward
 
         return out
     
+    def signed_sqr(self):
+        out_value = 0.5 * (self.data ** 2.)
+        out_value *= 1.0 if self.data < 0. else -1.0
+
+        out = Value(out_value, (self,), 'SignedSqr')
+
+        def _backward():
+            self.grad += (1.0 if self.data < 0. else -1.0) * out.grad
+
+        out._backward = _backward
+
+        return out
+        
+    def max(self, other):
+        out_value = self.data if self.data > other.data else other.data
+
+        out = Value(out_value, (self,other), 'Max')
+
+        def _backward():
+            if self.data >= other.data:
+                self.grad += out.grad
+            else:
+                other.grad += out.grad
+
+        out._backward = _backward
+
+        return out
+
     def softplus(self,beta = 10.):
         out_value = self.data + math.log1p(math.exp(-beta*self.data)) / beta
         
         out = Value(out_value, (self,), 'SoftPlus')
 
         def _backward():
-            out_grad_value = 1. / (1.+math.exp(-beta * out.data))
+            out_grad_value = 1. / (1.+math.exp(-beta * self.data))
             self.grad += out_grad_value * out.grad
 
         out._backward = _backward
@@ -90,6 +119,63 @@ class Value:
 
         return out
 
+    def abs(self):
+        out = Value(abs(self.data), (self,), 'abs')
+
+        def _backward():
+            self.grad += (-out.grad) if self.data < 0 else out.grad 
+
+        out._backward = _backward
+
+        return out
+
+    def exp(self):
+        out_value = cmath.exp(self.data) if isinstance(self.data, complex) else math.exp(self.data)
+        out = Value(out_value, (self,), 'exp')
+
+        def _backward():
+            self.grad += out_value.conjugate() * out.grad
+        out._backward = _backward
+
+        return out
+
+    def log(self):
+        out_value = cmath.log(self.data) if isinstance(self.data, complex) else cmath.log(self.data)
+        out = Value(out_value, (self,), 'log')
+
+        def _backward():
+            self.grad += (1. / self.data).conjugate() * out.grad
+        out._backward = _backward
+
+        return out
+
+    def eml(self, other):
+        # EML(x, y) = exp(x) - log(y), with principal-branch complex log.
+        exp_x = cmath.exp(self.data) if isinstance(self.data, complex) else math.exp(self.data)
+        log_y = cmath.log(other.data)
+        out = Value(exp_x - log_y, (self, other), 'EML')
+
+        def _backward():
+            self.grad  += exp_x.conjugate()        * out.grad
+            other.grad += (-1. / other.data).conjugate() * out.grad
+        out._backward = _backward
+
+        return out
+
+    def real(self):
+        # Bridge from a complex sub-graph back to a real-valued Value.
+        d = self.data
+        out_value = d.real if isinstance(d, complex) else d
+        out = Value(out_value, (self,), 'Re')
+
+        def _backward():
+            # For L real, ∂L/∂Re(z) flows back as the real part of z.grad;
+            # adding a real out.grad to a complex self.grad is the identity on Re,
+            # leaving Im(self.grad) untouched (correct: Re(z) doesn't depend on Im(z)).
+            self.grad += out.grad
+        out._backward = _backward
+
+        return out
 
     def fact(self):
         if self <= Value(0):
