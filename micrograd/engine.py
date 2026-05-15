@@ -151,7 +151,13 @@ class Value:
 
     def eml(self, other):
         # EML(x, y) = exp(x) - log(y), with principal-branch complex log.
-        exp_x = cmath.exp(self.data) if isinstance(self.data, complex) else math.exp(self.data)
+        # Clamp Re(arg) below the IEEE-754 double exp overflow threshold (~709.78)
+        # so out-of-distribution inputs (e.g. wide decision-boundary mesh) don't blow up.
+        if isinstance(self.data, complex):
+            x_safe = complex(min(self.data.real, 709.0), self.data.imag)
+            exp_x = cmath.exp(x_safe)
+        else:
+            exp_x = math.exp(min(self.data, 709.0))
         log_y = cmath.log(other.data)
         out = Value(exp_x - log_y, (self, other), 'EML')
 
