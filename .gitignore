@@ -1,2 +1,4 @@
 .ipynb_checkpoints/
 micrograd/__pycache__/*.pyc
+runs/*
+hp/*
